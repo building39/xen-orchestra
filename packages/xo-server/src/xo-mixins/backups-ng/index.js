@@ -46,6 +46,7 @@ import { type Schedule } from '../scheduling'
 
 import createSizeStream from '../../size-stream'
 import parseDuration from '../../_parseDuration'
+import patch from '../../patch'
 import { debounceWithKey, REMOVE_CACHE_ENTRY } from '../../_pDebounceWithKey'
 import { waitAll } from '../../_waitAll'
 import {
@@ -123,6 +124,19 @@ type MetadataFull = {|
   xva: string,
 |}
 type Metadata = MetadataDelta | MetadataFull
+
+const ensureCoherentProxyConfiguration = async (job, app) => {
+  for (const id of unboxIdsFromPattern(job.remotes)) {
+    const remote = await app.getRemote(id)
+    if (remote.proxy !== job.proxy) {
+      throw new Error(
+        job.proxy !== undefined
+          ? `The remote ${remote.name} should be linked to the proxy ${job.proxy}`
+          : `The remote ${remote.name} should not be linked to a proxy`
+      )
+    }
+  }
+}
 
 const compareSnapshotTime = (a: Vm, b: Vm): number =>
   a.snapshot_time < b.snapshot_time ? -1 : 1
@@ -638,7 +652,10 @@ export default class BackupNg {
           const xapis = {}
           await waitAll([
             asyncMap(remoteIds, async id => {
-              remotes[id] = await app.getRemoteWithCredentials(id)
+              const remote = await app.getRemoteWithCredentials(id)
+              if (remote.proxy === job.proxy) {
+                remotes[id] = remote
+              }
             }),
             asyncMap([...servers], async id => {
               const {
@@ -657,6 +674,10 @@ export default class BackupNg {
               }
             }),
           ])
+
+          if (isEmpty(remotes) && srIds.length === 0) {
+            throw new Error('Empty backup destination')
+          }
 
           return app.callProxyMethod(job.proxy, 'backup.run', {
             job: {
@@ -780,11 +801,25 @@ export default class BackupNg {
     })
   }
 
+  async updateBackupNgJob(job: $Shape<BackupJob>) {
+    const app = this._app
+
+    const { id, ...props } = job
+    job = await app.getJob(id, 'backup')
+    patch(job, props)
+
+    await ensureCoherentProxyConfiguration(job, app)
+
+    return app.updateJob(job, false)
+  }
+
   async createBackupNgJob(
     props: $Diff<BackupJob, {| id: string |}>,
     schedules?: $Dict<$Diff<Schedule, {| id: string |}>>
   ): Promise<BackupJob> {
     const app = this._app
+    await ensureCoherentProxyConfiguration(props, app)
+
     props.type = 'backup'
     const job: BackupJob = await app.createJob(props)
 
