@@ -53,7 +53,7 @@ export class OpenFlowChannel {
 
   // ---------------------------------------------------------------------------
 
-  addRule(vif, allow, protocol, port, ipRange, direction) {
+  addRule(vif, allow, protocol, port, ipRange, direction, ofport) {
     // TODO: use VIF to get bridge port
 
     const instructions = [
@@ -71,8 +71,6 @@ export class OpenFlowChannel {
     ]
 
     const ip = parseIp(ipRange)
-    log.info('*** -------------', { ip })
-
     let dlType, nwProto
     if (protocol === 'IP') {
       dlType = ofProtocol.dlType.ip
@@ -86,12 +84,13 @@ export class OpenFlowChannel {
       // ERROR?
     }
 
+    const mac = vif.MAC
     if (direction.includes('from')) {
       this._addFlow(
         {
           type: ofProtocol.matchType.standard,
           dl_type: dlType,
-          // dl_src: TODO,
+          dl_src: mac,
           nw_proto: nwProto,
           nw_dst: ip.addr,
           nw_dst_mask: ip.mask,
@@ -103,7 +102,7 @@ export class OpenFlowChannel {
         {
           type: ofProtocol.matchType.standard,
           dl_type: dlType,
-          // dl_dst: TODO,
+          dl_dst: mac,
           nw_proto: nwProto,
           nw_src: ip.addr,
           nw_src_mask: ip.mask,
@@ -117,7 +116,7 @@ export class OpenFlowChannel {
         {
           type: ofProtocol.matchType.standard,
           dl_type: dlType,
-          // dl_src: TODO,
+          dl_src: mac,
           nw_proto: nwProto,
           nw_dst: ip.addr,
           nw_dst_mask: ip.mask,
@@ -129,7 +128,7 @@ export class OpenFlowChannel {
         {
           type: ofProtocol.matchType.standard,
           dl_type: dlType,
-          // dl_dst: TODO,
+          dl_dst: mac,
           nw_proto: nwProto,
           nw_src: ip.addr,
           nw_src_mask: ip.mask,
@@ -140,11 +139,10 @@ export class OpenFlowChannel {
     }
   }
 
-  deleteRule(vif, protocol, port, ipRange, direction) {
+  deleteRule(vif, protocol, port, ipRange, direction, ofport) {
     // TODO: use VIF to get bridge port
 
     const ip = parseIp(ipRange)
-    log.info('*** -------------', { ip })
     let dlType, nwProto
     if (protocol === 'IP') {
       dlType = ofProtocol.dlType.ip
@@ -158,11 +156,12 @@ export class OpenFlowChannel {
       // ERROR?
     }
 
+    const mac = vif.MAC
     if (direction.includes('from')) {
       this._removeFlows({
         type: ofProtocol.matchType.standard,
         dl_type: dlType,
-        // dl_src: TODO,
+        dl_src: mac,
         nw_proto: nwProto,
         nw_dst: ip.addr,
         nw_dst_mask: ip.mask,
@@ -171,7 +170,7 @@ export class OpenFlowChannel {
       this._removeFlows({
         type: ofProtocol.matchType.standard,
         dl_type: dlType,
-        // dl_dst: TODO,
+        dl_dst: mac,
         nw_proto: nwProto,
         nw_src: ip.addr,
         nw_src_mask: ip.mask,
@@ -182,7 +181,7 @@ export class OpenFlowChannel {
       this._removeFlows({
         type: ofProtocol.matchType.standard,
         dl_type: dlType,
-        // dl_src: TODO,
+        dl_src: mac,
         nw_proto: nwProto,
         nw_dst: ip.addr,
         nw_dst_mask: ip.mask,
@@ -191,7 +190,7 @@ export class OpenFlowChannel {
       this._removeFlows({
         type: ofProtocol.matchType.standard,
         dl_type: dlType,
-        // dl_dst: TODO,
+        dl_dst: mac,
         nw_proto: nwProto,
         nw_src: ip.addr,
         nw_src_mask: ip.mask,

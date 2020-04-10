@@ -8,7 +8,7 @@ import { forOwn, toPairs } from 'lodash'
 const log = createLogger('xo:xo-server:sdn-controller:ovsdb-client')
 
 const OVSDB_PORT = 6640
-const PROTOCOLS = 'OpenFlow11'
+const PROTOCOLS = 'OpenFlow11' // Supported OpenFlow versions
 const TARGET = 'pssl:' // OpenFlow Controller target
 
 // =============================================================================
@@ -380,6 +380,31 @@ export class OvsdbClient {
     }
 
     socket.destroy()
+  }
+
+  async getOfPortForVif(vif) {
+    const where = [
+      ['external_ids', 'includes', toMap({ 'xs-vif-uuids': vif.uuid })],
+    ]
+    const socket = await this._connect()
+    const selectResult = await this._select(
+      'Interface',
+      ['ofport'],
+      where,
+      socket
+    )
+    if (selectResult === undefined) {
+      log.error('No of port found for VIF', {
+        network: vif.$network.name_label,
+        host: this.host.name_label,
+        vm: vif.$VM.name_label,
+        vif: vif.uuid,
+      })
+      return
+    }
+
+    socket.destroy()
+    return selectResult.ofport
   }
 
   // ===========================================================================

@@ -613,6 +613,38 @@ class SDNController extends EventEmitter {
 
   // ===========================================================================
 
+  async _addRule({ allow, vif, protocol, port, ipRange, direction }) {
+    assert(vif.plugged, 'VIF needs to be plugged to add rule')
+    await this._setPoolControllerIfNeeded(vif.$pool)
+
+    const client = this.ovsdbClients[vif.$VM.resident_on]
+    const channel = this.ofChannels[vif.$VM.resident_on]
+    const ofport = await client.getOfPortForVif(vif)
+    await channel.addRule(
+      vif,
+      allow,
+      protocol,
+      port,
+      ipRange,
+      direction,
+      ofport
+    )
+    // TODO: update vif other_config
+  }
+
+  async _deleteRule({ vif, protocol, port, ipRange, direction }) {
+    assert(vif.plugged, 'VIF needs to be plugged to delete rule')
+    await this._setPoolControllerIfNeeded(vif.$pool)
+
+    const client = this.ovsdbClients[vif.$VM.resident_on]
+    const channel = this.ofChannels[vif.$VM.resident_on]
+    const ofport = await client.getOfPortForVif(vif)
+    await channel.deleteRule(vif, protocol, port, ipRange, direction, ofport)
+    // TODO: update vif other_config
+  }
+
+  // ---------------------------------------------------------------------------
+
   async _createPrivateNetwork({
     poolIds,
     pifIds,
@@ -913,23 +945,22 @@ class SDNController extends EventEmitter {
   // ---------------------------------------------------------------------------
 
   async _setPoolControllerIfNeeded(pool) {
-    if (!isControllerNeeded(pool.$xapi)) {
-      // Nothing to do
-      return
-    }
+    if (isControllerNeeded(pool.$xapi)) {
+      const controller = find(pool.$xapi.objects.all, {
+        $type: 'SDN_controller',
+      })
+      if (controller !== undefined) {
+        await pool.$xapi.call('SDN_controller.forget', controller.$ref)
+        log.debug('Old SDN controller removed', {
+          pool: pool.name_label,
+        })
+      }
 
-    const controller = find(pool.$xapi.objects.all, { $type: 'SDN_controller' })
-    if (controller !== undefined) {
-      await pool.$xapi.call('SDN_controller.forget', controller.$ref)
-      log.debug('Old SDN controller removed', {
+      await pool.$xapi.call('SDN_controller.introduce', PROTOCOL)
+      log.debug('SDN controller has been set', {
         pool: pool.name_label,
       })
     }
-
-    await pool.$xapi.call('SDN_controller.introduce', PROTOCOL)
-    log.debug('SDN controller has been set', {
-      pool: pool.name_label,
-    })
 
     const hosts = filter(pool.$xapi.objects.all, { $type: 'host' })
     await Promise.all(
