@@ -471,8 +471,8 @@ class SDNController extends EventEmitter {
       this._cleaners.push(await this._manageXapi(xapi))
       const hosts = filter(xapi.objects.all, { $type: 'host' })
       for (const host of hosts) {
-        this._createOvsdbClient(host)
-        this._createOfChannel(host)
+        this._getOrCreateOvsdbClient(host)
+        this._getOrCreateOfChannel(host)
       }
 
       // Add already existing private networks
@@ -617,8 +617,8 @@ class SDNController extends EventEmitter {
     assert(vif.plugged, 'VIF needs to be plugged to add rule')
     await this._setPoolControllerIfNeeded(vif.$pool)
 
-    const client = this.ovsdbClients[vif.$VM.resident_on]
-    const channel = this.ofChannels[vif.$VM.resident_on]
+    const client = this._getOrCreateOvsdbClient(vif.$VM.$resident_on)
+    const channel = this._getOrCreateOfChannel(vif.$VM.$resident_on)
     const ofport = await client.getOfPortForVif(vif)
     await channel.addRule(
       vif,
@@ -636,8 +636,8 @@ class SDNController extends EventEmitter {
     assert(vif.plugged, 'VIF needs to be plugged to delete rule')
     await this._setPoolControllerIfNeeded(vif.$pool)
 
-    const client = this.ovsdbClients[vif.$VM.resident_on]
-    const channel = this.ofChannels[vif.$VM.resident_on]
+    const client = this._getOrCreateOvsdbClient(vif.$VM.$resident_on)
+    const channel = this._getOrCreateOfChannel(vif.$VM.$resident_on)
     const ofport = await client.getOfPortForVif(vif)
     await channel.deleteRule(vif, protocol, port, ipRange, direction, ofport)
     // TODO: update vif other_config
@@ -698,8 +698,8 @@ class SDNController extends EventEmitter {
       await Promise.all(
         map(hosts, async host => {
           await createTunnel(host, createdNetwork)
-          this._createOvsdbClient(host)
-          this._createOfChannel(host)
+          this._getOrCreateOvsdbClient(host)
+          this._getOrCreateOfChannel(host)
         })
       )
       await this._setPoolControllerIfNeeded(pool)
@@ -747,8 +747,8 @@ class SDNController extends EventEmitter {
         if (!this._newHosts.some(_ => _.$ref === object.$ref)) {
           this._newHosts.push(object)
         }
-        this._createOvsdbClient(object)
-        this._createOfChannel(object)
+        this._getOrCreateOvsdbClient(object)
+        this._getOrCreateOfChannel(object)
       } else if ($type === 'PIF') {
         log.debug('New PIF', {
           device: object.device,
@@ -1141,24 +1141,25 @@ class SDNController extends EventEmitter {
 
   // ---------------------------------------------------------------------------
 
-  _createOvsdbClient(host) {
-    if (this.ovsdbClients[host.$ref] !== undefined) {
-      return
+  _getOrCreateOvsdbClient(host) {
+    let client = this.ovsdbClients[host.$ref]
+    if (client === undefined) {
+      client = new OvsdbClient(host, this._tlsHelper)
+      this.ovsdbClients[host.$ref] = client
     }
 
-    const client = new OvsdbClient(host, this._tlsHelper)
-    this.ovsdbClients[host.$ref] = client
+    return client
   }
 
-  _createOfChannel(host) {
-    const foundChannel = this.ofChannels[host.$ref]
-    if (foundChannel !== undefined) {
-      return
+  _getOrCreateOfChannel(host) {
+    let channel = this.ofChannels[host.$ref]
+    if (channel === undefined) {
+      channel = new OpenFlowChannel(host, this._tlsHelper)
+      this.ofChannels[host.$ref] = channel
+      channel._connect()
     }
 
-    const channel = new OpenFlowChannel(host, this._tlsHelper)
-    this.ofChannels[host.$ref] = channel
-    channel._connect()
+    return channel
   }
 }
 
