@@ -391,7 +391,8 @@ class SDNController extends EventEmitter {
   }
 
   async load() {
-    // Expose method to create private network
+    // ---------------- Private Network method ---------------------------------
+
     const createPrivateNetwork = params =>
       this._createPrivateNetwork({
         encrypted: false,
@@ -422,9 +423,37 @@ class SDNController extends EventEmitter {
       mtu: { type: 'integer', optional: true },
     }
 
+    // ---------------- OpenFlow rules method ----------------------------------
+
+    const addRule = params => this._addRule(params)
+    addRule.description = 'Add a rule to a VIF'
+    addRule.params = {
+      allow: { type: 'boolean' },
+      vifId: { type: 'string' },
+      protocol: { type: 'string' },
+      port: { type: 'integer' },
+      ipRange: { type: 'string' },
+      direction: { type: 'string' },
+    }
+
+    const deleteRule = params => this._deleteRule(params)
+    deleteRule.description = 'Delete a rule from a VIF'
+    deleteRule.params = {
+      vifId: { type: 'string' },
+      protocol: { type: 'string' },
+      port: { type: 'integer' },
+      ipRange: { type: 'string' },
+      direction: { type: 'string' },
+    }
+
+    // -------------------------------------------------------------------------
+
     this._unsetApiMethods = this._xo.addApiMethods({
       sdnController: {
         createPrivateNetwork,
+
+        addRule,
+        deleteRule,
       },
     })
 
@@ -617,7 +646,8 @@ class SDNController extends EventEmitter {
 
   // ===========================================================================
 
-  async _addRule({ allow, vif, protocol, port, ipRange, direction }) {
+  async _addRule({ allow, vifId, protocol, port, ipRange, direction }) {
+    const vif = this._xo.getXapiObject(this._xo.getObject(vifId, 'VIF'))
     assert(vif.plugged, 'VIF needs to be plugged to add rule')
     await this._setPoolControllerIfNeeded(vif.$pool)
 
@@ -650,7 +680,8 @@ class SDNController extends EventEmitter {
     )
   }
 
-  async _deleteRule({ vif, protocol, port, ipRange, direction }) {
+  async _deleteRule({ vifId, protocol, port, ipRange, direction }) {
+    const vif = this._xo.getXapiObject(this._xo.getObject(vifId, 'VIF'))
     assert(vif.plugged, 'VIF needs to be plugged to delete rule')
     await this._setPoolControllerIfNeeded(vif.$pool)
 
