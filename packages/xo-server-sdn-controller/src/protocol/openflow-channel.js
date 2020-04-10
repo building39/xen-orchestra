@@ -54,8 +54,6 @@ export class OpenFlowChannel {
   // ---------------------------------------------------------------------------
 
   addRule(vif, allow, protocol, port, ipRange, direction, ofport) {
-    // TODO: use VIF to get bridge port
-
     const instructions = [
       {
         type: ofProtocol.instructionType.applyActions,
@@ -140,8 +138,6 @@ export class OpenFlowChannel {
   }
 
   deleteRule(vif, protocol, port, ipRange, direction, ofport) {
-    // TODO: use VIF to get bridge port
-
     const ip = parseIp(ipRange)
     let dlType, nwProto
     if (protocol === 'IP') {
@@ -255,9 +251,24 @@ export class OpenFlowChannel {
         {
           const { flags } = message
           log.info('CONFIG_REPLY', { flags })
-          this.addRule(undefined, true, 'TCP', 5060, '192.168.42.42/17', 'from')
+          this.addRule(
+            undefined,
+            true,
+            'TCP',
+            5060,
+            '192.168.42.42/17',
+            'from',
+            0
+          )
           setTimeout(() => {
-            this.deleteRule(undefined, 'TCP', 5060, '192.168.42.42/17', 'from')
+            this.deleteRule(
+              undefined,
+              'TCP',
+              5060,
+              '192.168.42.42/17',
+              'from',
+              0
+            )
           }, 100000)
         }
         break

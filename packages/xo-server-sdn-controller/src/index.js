@@ -305,6 +305,10 @@ class SDNController extends EventEmitter {
   - `status`:
     - `active`: `true` if the corresponding OpenVSwitch bridge is correctly configured and working
     - `key`   : Corresponding OpenVSwitch bridge name (missing if `active` is `false`)
+
+  Attributes on VIFs (OpenFlow entries):
+  - `other_config`:
+    - `xo:sdn-controller:of-rules`: A list of openflow entries to aply to this VIF
   */
 
   constructor({ xo, getDataDir }) {
@@ -629,7 +633,21 @@ class SDNController extends EventEmitter {
       direction,
       ofport
     )
-    // TODO: update vif other_config
+    const vifRules = vif.other_config['xo:sdn-controller:of-rules']
+    const newVifRules = vifRules !== undefined ? JSON.parse(vifRules) : []
+    newVifRules.push(
+      JSON.stringify({
+        allow,
+        protocol,
+        port,
+        ipRange,
+        direction,
+      })
+    )
+    vif.update_other_config(
+      'xo:sdn-controller:of-rules',
+      JSON.stringify(newVifRules)
+    )
   }
 
   async _deleteRule({ vif, protocol, port, ipRange, direction }) {
@@ -640,7 +658,25 @@ class SDNController extends EventEmitter {
     const channel = this._getOrCreateOfChannel(vif.$VM.$resident_on)
     const ofport = await client.getOfPortForVif(vif)
     await channel.deleteRule(vif, protocol, port, ipRange, direction, ofport)
-    // TODO: update vif other_config
+    const vifRules = vif.other_config['xo:sdn-controller:of-rules']
+    if (vifRules === undefined) {
+      // Nothing to do
+      return
+    }
+
+    const newVifRules = omitBy(JSON.parse(vifRules), vifRule => {
+      const rule = JSON.parse(vifRule)
+      return (
+        rule.protocol === protocol &&
+        rule.port === port &&
+        rule.ipRange === ipRange &&
+        rule.direction === direction
+      )
+    })
+    vif.update_other_config(
+      'xo:sdn-controller:of-rules',
+      JSON.stringify(newVifRules)
+    )
   }
 
   // ---------------------------------------------------------------------------
