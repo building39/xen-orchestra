@@ -125,19 +125,6 @@ type MetadataFull = {|
 |}
 type Metadata = MetadataDelta | MetadataFull
 
-const ensureCoherentProxyConfiguration = async (job, app) => {
-  for (const id of unboxIdsFromPattern(job.remotes)) {
-    const remote = await app.getRemote(id)
-    if (remote.proxy !== job.proxy) {
-      throw new Error(
-        job.proxy !== undefined
-          ? `The remote ${remote.name} should be linked to the proxy ${job.proxy}`
-          : `The remote ${remote.name} should not be linked to a proxy`
-      )
-    }
-  }
-}
-
 const compareSnapshotTime = (a: Vm, b: Vm): number =>
   a.snapshot_time < b.snapshot_time ? -1 : 1
 
@@ -801,6 +788,19 @@ export default class BackupNg {
     })
   }
 
+  async _ensureCoherentProxyConfiguration(job) {
+    for (const id of unboxIdsFromPattern(job.remotes)) {
+      const remote = await this._app.getRemote(id)
+      if (remote.proxy !== job.proxy) {
+        throw new Error(
+          job.proxy !== undefined
+            ? `The remote ${remote.name} should be linked to the proxy ${job.proxy}`
+            : `The remote ${remote.name} should not be linked to a proxy`
+        )
+      }
+    }
+  }
+
   async updateBackupNgJob(job: $Shape<BackupJob>) {
     const app = this._app
 
@@ -808,7 +808,7 @@ export default class BackupNg {
     job = await app.getJob(id, 'backup')
     patch(job, props)
 
-    await ensureCoherentProxyConfiguration(job, app)
+    await this._ensureCoherentProxyConfiguration(job)
 
     return app.updateJob(job, false)
   }
@@ -817,8 +817,9 @@ export default class BackupNg {
     props: $Diff<BackupJob, {| id: string |}>,
     schedules?: $Dict<$Diff<Schedule, {| id: string |}>>
   ): Promise<BackupJob> {
+    await this._ensureCoherentProxyConfiguration(props)
+
     const app = this._app
-    await ensureCoherentProxyConfiguration(props, app)
 
     props.type = 'backup'
     const job: BackupJob = await app.createJob(props)
