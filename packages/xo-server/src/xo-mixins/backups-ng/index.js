@@ -820,7 +820,6 @@ export default class BackupNg {
     await this._ensureCoherentProxyConfiguration(props)
 
     const app = this._app
-
     props.type = 'backup'
     const job: BackupJob = await app.createJob(props)
 
